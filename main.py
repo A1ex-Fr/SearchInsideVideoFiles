@@ -1,4 +1,8 @@
 # import the necessary packages
+# to run the script need to use Terminal with path parameter
+# run command:
+# python3 main.py /Users/alex/Python/PycharmProjects/SearchInsideVideoFiles/VideoSourceFiles
+
 from PIL import Image
 import cv2
 import imutils
@@ -10,25 +14,22 @@ import ntpath
 from sys import argv
 import os
 import csv
+import collections   # for finding duplicates
 
 # Timer of the script start
 start_time = timeit.default_timer()
 
-hashes_per_video = ()  # List of files and hashes
-result_hashes = ()  # Result list of hashes lists
-
-
-# Arguments
-def read_source_folder(argument):
-    return argument[1]
-
+# hashes_per_video = ()  # Declare empty list of files and hashes
+# result_hashes = ()  # Declare empty result list of hashes lists
 
 # Extract file name and file path
 def path_leaf(path):
     head, tail = ntpath.split(path)
     return tail
 
-
+# To take only one argument, just in case
+def read_source_folder(argument):
+     return argument[1]
 # Get file path from Argument, custom function
 source_path = read_source_folder(argv)
 #   Build GUI to choose folder
@@ -39,9 +40,9 @@ source_path = read_source_folder(argv)
 
 # Get all files from the folder
 source_video_files = os.listdir(source_path)
-# print(source_video_files)  # Debug
+# DEBUG print(source_video_files)
 
-# Write files to CSV with numbering, in order to prevent changes
+# Write list of video files into CSV table with numbering, in order to prevent changes after script started
 file_num = 0
 with open(source_path + '/List of Files.csv', 'w') as result:
     writer = csv.writer(result, delimiter=",")
@@ -58,10 +59,10 @@ with open(source_path + '/List of Files.csv', 'w') as result:
             columns = [c.strip() for c in row.strip(', ').split(',')]
             writer.writerow(columns)
 
-# For source video files
+# Extract images from source video files
 for (root, dirs, file) in os.walk(source_path):
     for f in file:
-
+        # Exclude temp files
         if ".DS_S" in f:
             continue
         if ".mp4" in f:
@@ -106,13 +107,14 @@ for (root, dirs, file) in os.walk(source_path):
                 frameId += 1
             cap.release()
 
+# Compare extracted images
+batch_length = 4
 
 batch_start_item = 0
-print('batch_start_item : ' + str(batch_start_item))
 batch_end_item = 0
-print('batch_end_item : ' + str(batch_end_item))
+
 hashes_per_batch = []  # Final hashes for searching batch
-batch_length = 4
+
 for (root, dirs, files) in os.walk('./jpg'):
     for _dir in dirs:
         path = './jpg/' + _dir  # Extract category name to build a path to file without _1 at the end
@@ -123,14 +125,14 @@ for (root, dirs, files) in os.walk('./jpg'):
         # print('FILTER :' + str(list(filtered_list_jpg)[0:2]))
         sorted_list_len = len(list(filtered_list_jpg))
         print('LEN :' + str(sorted_list_len))
-        start_item = sorted_list_len // 2 - batch_length // 2
-        end_item = sorted_list_len // 2 + batch_length // 2
+        start_item = 0                                  # sorted_list_len // 2 - batch_length // 2
+        end_item = len(list(filtered_list_jpg))         # sorted_list_len // 2 + batch_length // 2
         # print(start_item)
         # print(end_item)
         batch_to_compare = list(filtered_list_jpg)[start_item:end_item]
         print('batch_to_compare ' + str(batch_to_compare))
 
-        Build a XX length hash for image Batch
+        # Build a XX length hash for image Batch
         for _file in batch_to_compare:
 
             img_path = path + '/' + _file
@@ -142,18 +144,26 @@ for (root, dirs, files) in os.walk('./jpg'):
             hshperceptual = hsh.phash(im_pil, 20)
             # print('hshperceptual :' + str(hshperceptual))
             hashes_per_batch.append(hshperceptual)  # Tuple concatenation
-            full_list_of_taga = '\n'.join(map(str, hashes_per_batch))  # Debug
 
-            print(full_list_of_taga)
+        full_list_of_hashes = '\n'.join(map(str, hashes_per_batch))  # To str
+        with open('./VideoSourceFiles/full_list_of_hashes.txt', 'w') as b:
+            b.write(full_list_of_hashes)
+            # print(full_list_of_hashes)
 
 batch_start_item += batch_length
 batch_end_item += batch_length
+print('batch_start_item : ' + str(batch_start_item))
+print('batch_end_item : ' + str(batch_end_item))
 
 
+# Find duplicated hashes in the file ./VideoSourceFiles/full_list_of_hashes.txt
+with open('./VideoSourceFiles/full_list_of_hashes.txt') as f:
+    seen = list()
+    for line in f:
+        seen.append(line)
 
-
-
-# For extracted pictures (JPG)
+with open('./VideoSourceFiles/full_list_of_hashes_DUPLICATIONS.txt', 'w') as b:
+    b.write('\n'.join([item for item, count in collections.Counter(seen).items() if count > 1]))
 
 
 # DEBUG print(len(hashes_per_video))
