@@ -1,38 +1,34 @@
+import time
 from PIL import Image
 import cv2
 import imutils
 import math
 import numpy as np
 import imagehash as hsh
-import timeit
 import ntpath
 from sys import argv
 import os
 import csv
+import shutil  # to remove folder recursively
 
 # Timer of the script start
-start_time = timeit.default_timer()
+start_time = time.monotonic()
 
-hashes_per_video = ()  # List of files and hashes
-result_hashes = ()  # Result list of hashes lists
-
-root_path = '/Users/alex/PycharmProjects/pythonProject2/VideoSearch/'
-video_source_path = '/Users/alex/PycharmProjects/pythonProject2/VideoSearch/VideoSourceFiles'
-img_root_path = '/Users/alex/PycharmProjects/pythonProject2/VideoSearch/jpg'
-
-
-# Arguments
-def read_source_folder(argument):
-    return argument[1]
+# Get always 1st arguments (path)
+root_path = argv[1]
+print(root_path)
+# DEBUG root_path = '/Users/alex/Python/PycharmProjects/SearchInsideVideoFiles/'
+video_source_path = 'VideoSourceFiles/'
+img_root_path = 'jpg/'
 
 
 # Extract file name and file path
-def path_leaf(path):
-    head, tail = ntpath.split(path)
+def path_leaf(any_path):
+    head, tail = ntpath.split(any_path)
     return tail
 
 
-# Returnes
+# Returns list of directories
 def dirs_by_path_as_tup(dir_path):
     return_value = ()
     for (root, dirs, files) in os.walk(dir_path):
@@ -46,26 +42,126 @@ def dirs_by_path_as_tup(dir_path):
 print('DIRECTORIES: ', dirs_by_path_as_tup(img_root_path))
 
 
-def files_by_path_as_tup(file_path):
-    return_value = ()
+# Returns sorted list of files
+def get_files_by_path(file_path, ext):
+    list_of_files_by_ext = []
     for (root, dirs, files) in os.walk(file_path):
         for _file in files:
-            if _file[0] == '.' or _file[-1] != '4':
-                files.pop(files.index(_file))
+            split_tup = os.path.splitext(_file)
+            if split_tup[1] == ext:
+                list_of_files_by_ext.append(_file)
 
-        return_value += tuple(files)
-    return sorted(return_value)
-
-
-print('VIDEO_FILES :', files_by_path_as_tup(video_source_path))
-
-print('IMG_FILES :', files_by_path_as_tup(img_root_path + '/city'))
+    return sorted(list_of_files_by_ext)
 
 
+# print('VIDEO_FILES :', get_files_by_path(video_source_path, '.mp4'))
+# print('IMAGE_FILES :', get_files_by_path(img_root_path, '.jpg'))
 
 
+# mp4_file_name_jpg_folder = 'N2__________'
+# print(root_path + img_root_path + mp4_file_name_jpg_folder)
+# print('IMG_FILES :', files_by_path_as_tup(root_path + img_root_path + mp4_file_name_jpg_folder))
 
-# scan_path_video(img_source_path)
+
+# Extract frames as JPG and distribute them in folders named as Video files
+def extract_frames_and_distribute(video_files_list):
+    jpg_folders_list = []
+    for video_file in video_files_list:
+        split_tup = os.path.splitext(video_file)  # split file name and extension
+        # DEBUG print(split_tup[0])  # take file name, for ext use [1]
+        file_name_extracted = split_tup[0]  # use file name for category naming
+        jpg_folders_list.append(file_name_extracted)
+        folder_path = f'./jpg/{file_name_extracted}'
+        # frameId = 0
+        if not os.path.exists(folder_path):
+            try:
+                os.mkdir(folder_path)
+            except OSError as e:
+                print("Creating folder Error: %s : %s" % (folder_path, e.strerror))
+            cap = cv2.VideoCapture(
+                video_source_path + video_file)  # cap = cv2.VideoCapture(os.path.abspath(video_file))
+
+            # Read video parameters
+            frame_rate = int(cap.get(cv2.CAP_PROP_FPS))
+            num_clip_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+
+            # checks whether frames were extracted
+            # while cap.isOpened():
+            success, image = cap.read()
+            count = 0
+            while success:
+                jpg_file_path = f'{folder_path}/{count}.jpg'
+                cv2.imwrite(jpg_file_path, image)
+                success, image = cap.read()
+                # DEBUG print('Read a new frame: ', success)
+                count += 1
+
+                # Read image and define high and width
+                img = cv2.imread(jpg_file_path)
+                h, w = int(img.shape[0]), int(img.shape[1]) // 3  # 1/3 of original size
+                resized_size = (w, h)
+                resized_img = cv2.resize(img, resized_size, interpolation=cv2.INTER_CUBIC)
+                cv2.imwrite(jpg_file_path,
+                            cv2.cvtColor(resized_img, cv2.COLOR_BGR2GRAY)[int(h * 0.333):int(h * 0.666),
+                            0:w])  # Write & convert to grayscale, extract middle part of the image. Speed up...
+
+            # break
+            # cv2.destroyAllWindows()
+            # cap.release()
+        else:
+            try:
+                shutil.rmtree(folder_path)
+            except:
+                print(f'Error. Can\'t delete dolder {folder_path}')
+
+    return jpg_folders_list
+
+
+jpg_created_folders_by_func = extract_frames_and_distribute(get_files_by_path(video_source_path, '.mp4'))
+print('CREATED JPG FOLDERS: ', jpg_created_folders_by_func)
+
+
+def build_hash_func(img_folders_name):  # Maybe SQLite needs to be connected to store hashes
+    for folder in img_folders_name:
+        for (root, dirs, files) in os.walk(img_root_path + folder):
+            for jpg_file in files:
+                # print('DEBUG:', file)
+                # full_path_to_jpg = root_path + img_root_path + folder
+                img_object = cv2.imread(root + '/' + jpg_file)
+                # print('IMAGE', img_object)
+                image_pil = Image.fromarray(img_object)
+                hshperceptual = hsh.phash(image_pil, 10)  # number of hash characters, need to check
+                # print('hshperceptual :' + str(hshperceptual))
+                with open(root + '/' + folder + '.txt', 'a') as hashes_list:
+                    hashes_list.write('\n' + str(hshperceptual))
+
+
+build_hash_func(jpg_created_folders_by_func)
+
+# Compare hashes
+full_jpg_categories_path = root_path + '/' + img_root_path
+
+txt_hash_files = []
+for root, dirs, files in os.walk(full_jpg_categories_path):
+    for file in files:
+        if (file.endswith(".txt")):
+            # print('DEBUG: ', os.path.join(root, file))
+            txt_hash_files.append(os.path.join(root, file))
+            print(txt_hash_files)
+result_file = full_jpg_categories_path + 'result.txt'
+
+with open(result_file, 'w') as outfile:
+    for txt in txt_hash_files:
+        with open(txt) as infile:
+            outfile.write(infile.read())
+
+# im_pil = Image.fromarray(
+#     img)  # Takes the array object as the input and returns the image object made from the array object.
+#
+# hshperceptual = hsh.phash(im_pil, 20)
+# # print('hshperceptual :' + str(hshperceptual))
+# hashes_per_batch.append(hshperceptual)  # Tuple concatenation
+# full_list_of_taga = '\n'.join(map(str, hashes_per_batch))
 
 
 # import os
@@ -119,8 +215,6 @@ print('IMG_FILES :', files_by_path_as_tup(img_root_path + '/city'))
 #         # print(os.path.join(root, name))
 #
 #         print(name, i)
-
-
 # import os
 #
 # jpg_path = './jpg/'
@@ -217,3 +311,6 @@ print('IMG_FILES :', files_by_path_as_tup(img_root_path + '/city'))
 # i += 1
 # if hash_difference == 0:
 #     print(hash_difference)
+
+
+print(f'SCRIPT TOOK {time.monotonic() - start_time}')
