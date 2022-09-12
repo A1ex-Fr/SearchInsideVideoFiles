@@ -19,7 +19,12 @@ root_path = argv[1]
 print(root_path)
 # DEBUG root_path = '/Users/alex/Python/PycharmProjects/SearchInsideVideoFiles/'
 video_source_path = 'VideoSourceFiles/'
-img_root_path = 'jpg/'
+img_root_path = root_path + '/jpg/'
+try:
+    os.mkdir(img_root_path)
+except OSError:
+    print(f'cannot create JPG, it might already exists in {root_path}')
+    pass
 
 
 # Extract file name and file path
@@ -59,8 +64,8 @@ def get_files_by_path(file_path, ext):
 
 
 # mp4_file_name_jpg_folder = 'N2__________'
-# print(root_path + img_root_path + mp4_file_name_jpg_folder)
-# print('IMG_FILES :', files_by_path_as_tup(root_path + img_root_path + mp4_file_name_jpg_folder))
+# print(img_root_path + mp4_file_name_jpg_folder)
+# print('IMG_FILES :', files_by_path_as_tup(img_root_path + mp4_file_name_jpg_folder))
 
 
 # Extract frames as JPG and distribute them in folders named as Video files
@@ -71,7 +76,7 @@ def extract_frames_and_distribute(video_files_list):
         # DEBUG print(split_tup[0])  # take file name, for ext use [1]
         file_name_extracted = split_tup[0]  # use file name for category naming
         jpg_folders_list.append(file_name_extracted)
-        folder_path = f'./jpg/{file_name_extracted}'
+        folder_path = f'{root_path}/jpg/{file_name_extracted}'
         # frameId = 0
         if not os.path.exists(folder_path):
             try:
@@ -79,7 +84,8 @@ def extract_frames_and_distribute(video_files_list):
             except OSError as e:
                 print("Creating folder Error: %s : %s" % (folder_path, e.strerror))
             cap = cv2.VideoCapture(
-                video_source_path + video_file)  # cap = cv2.VideoCapture(os.path.abspath(video_file))
+                # TEST1 video_source_path + video_file)  # cap = cv2.VideoCapture(os.path.abspath(video_file))
+                root_path + '/' + video_file)  # cap = cv2.VideoCapture(os.path.abspath(video_file))
 
             # Read video parameters
             frame_rate = int(cap.get(cv2.CAP_PROP_FPS))
@@ -117,17 +123,18 @@ def extract_frames_and_distribute(video_files_list):
     return jpg_folders_list
 
 
-jpg_created_folders_by_func = extract_frames_and_distribute(get_files_by_path(video_source_path, '.mp4'))
+jpg_created_folders_by_func = extract_frames_and_distribute(get_files_by_path(root_path, '.mp4'))
 print('CREATED JPG FOLDERS: ', jpg_created_folders_by_func)
 
 
+# Save hashes per video
 def build_hash_func(img_folders_name):  # Maybe SQLite needs to be connected to store hashes
     for folder in img_folders_name:
         for (root, dirs, files) in os.walk(img_root_path + folder):
             for jpg_file in files:
-                # print('DEBUG:', file)
-                # full_path_to_jpg = root_path + img_root_path + folder
-                img_object = cv2.imread(root + '/' + jpg_file)
+                # print('DEBUG:', jpg_file)
+                # full_path_to_jpg = img_root_path + folder
+                img_object = cv2.imread(img_root_path + folder + '/' + jpg_file)
                 # print('IMAGE', img_object)
                 image_pil = Image.fromarray(img_object)
                 hshperceptual = hsh.phash(image_pil, 10)  # number of hash characters, need to check
@@ -135,16 +142,19 @@ def build_hash_func(img_folders_name):  # Maybe SQLite needs to be connected to 
                 with open(root + '/' + folder + '.txt', 'a') as hashes_list:
                     hashes_list.write('\n' + str(hshperceptual))
 
+    return img_folders_name
+
 
 build_hash_func(jpg_created_folders_by_func)
+# print('build_hash_func: ', build_hash_func(jpg_created_folders_by_func))
 
 # Compare hashes
-full_jpg_categories_path = root_path + '/' + img_root_path
+full_jpg_categories_path = img_root_path
 
 txt_hash_files = []
 for root, dirs, files in os.walk(full_jpg_categories_path):
     for file in files:
-        if (file.endswith(".txt")):
+        if file.endswith(".txt"):
             # print('DEBUG: ', os.path.join(root, file))
             txt_hash_files.append(os.path.join(root, file))
             print(txt_hash_files)
