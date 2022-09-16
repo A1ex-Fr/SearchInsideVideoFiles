@@ -1,14 +1,5 @@
 # Need RAM checker to be added
-# Illegal characters for folders and file naming to be done
-# < (less than)
-# > (greater than)
-# : (colon)
-# " (double quote)
-# / (forward slash)
-# \ (backslash)
-# | (vertical bar or pipe)
-# ? (question mark)
-# * (asterisk)
+
 
 import time
 from typing import List, Tuple
@@ -26,6 +17,8 @@ import shutil  # to remove folder recursively
 
 from threading import Thread
 from queue import Queue
+
+import pandas as pd
 
 # Timer of the script start
 start_time = time.monotonic()
@@ -121,11 +114,15 @@ def extract_frames(video_files_list: list) -> list:
         # f_path = path_leaf(mp4_file_path)  # VideoSourceFiles/, //Users../SearchInsideVideoFiles/VideoSourceFiles/jpg/
         mp4_file_path = root_path + '/' + mp4_file  # full file path for Capturing
         folder_path = f'{img_root_path}{f_name}'  # TO BE DELETED TEMP!!!!!!!!!!!
-        print('folder_path',folder_path)
+        print('folder_path', folder_path)
         if not os.path.exists(folder_path):  # TO BE DELETED TEMP!!!!!!!!!!!
             jpg_folder = create_jpg_folder(folder_path)  # function create a folder for JPGs
+            # head, tail = path_leaf(jpg_folder)
+            # jpg_folders_list = jpg_folders_list + (f_name,)
+            # print('JPGs', jpg_folders_list)
+            jpg_folders_list.append(f_name)
             cap = cv2.VideoCapture(mp4_file_path)
-            total_frames_per_file = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            # total_frames_per_file = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             success, jpg = cap.read()
             count = 0
             while success:
@@ -135,10 +132,9 @@ def extract_frames(video_files_list: list) -> list:
                 jpg_file_path = f'{jpg_folder}/{f_name}_{str(count).zfill(6)}.jpg'
                 cv2.imwrite(jpg_file_path, jpg)
                 success, jpg = cap.read()
-                print('Read a new frame: ', success)
+                # print('Read a new frame: ', success)
                 count += 1
-                jpg_folders_list.append(jpg)
-                # print('JPGs', jpg_folders_list)
+
         else:
             try:  # TO BE DELETED TEMP!!!!!!!!!!!
                 # Delete folder recursively TO BE DELETED TEMP!!!!!!!!!!!
@@ -148,70 +144,64 @@ def extract_frames(video_files_list: list) -> list:
     return jpg_folders_list
 
 
-extract_frames(mp4_file_list)
+jpg_folders = extract_frames(mp4_file_list)
+print('jpg_folders', jpg_folders)
 
 
-def distribute():
-    pass
-    return jpg_folders_list
+# Save hashes per video
+def build_hashes_list_file(img_folders_list: str) -> str:  # write hashes into CSV file
+    for folder in img_folders_list:
+        for (root, dirs, files) in os.walk(img_root_path + folder):
+
+            with open(root + '/' + folder + '.csv', 'a', encoding='UTF8') as hashes_per_video_file:
+                writer = csv.writer(hashes_per_video_file)
+
+                for jpg_file in files:
+                    img_object = cv2.imread(img_root_path + folder + '/' + jpg_file)
+                    image_pil = Image.fromarray(img_object)
+                    hshperceptual = hsh.phash(image_pil, 10)  # number of hash characters, need to check
+
+                    csv_data_row = [folder, str(hshperceptual)]  # building csv row
+                    writer.writerow(csv_data_row)  # write row
+
+    return img_folders_list
 
 
-#
-#
-# jpg_folders = extract_frames_and_distribute(mp4_file_list)  # list of all JPG folders
-# print(f'Extract frames *Function {time.monotonic() - start_time}')
-#
-#
-# # Save hashes per video
-# def build_hashes_list_file(img_folders_list: str) -> str:  # write hashes into CSV file
-#     for folder in img_folders_list:
-#         for (root, dirs, files) in os.walk(img_root_path + folder):
-#             header = ['VideoFileName', 'Hashes']   # building csv header
-#             with open(root + '/' + folder + '.csv', 'a', encoding='UTF8') as hashes_per_video_file:
-#                 writer = csv.writer(hashes_per_video_file)
-#                 # write the header
-#                 writer.writerow(header)
-#                 for jpg_file in files:
-#                     img_object = cv2.imread(img_root_path + folder + '/' + jpg_file)
-#                     image_pil = Image.fromarray(img_object)
-#                     hshperceptual = hsh.phash(image_pil, 10)  # number of hash characters, need to check
-#
-#                     csv_data_row = [folder, str(hshperceptual)]  # building csv row
-#                     writer.writerow(csv_data_row)  # write row
-#
-#     return img_folders_list
-#
-#
-#
-# build_hashes_list_file(jpg_folders)  # write hashes in file
-#
-# csv_hash_files: list[str] = []  # prepare a placeholder for the function: build_hashes_list
-#
-#
-# # Build list of CSV files, which contain hashes to go through them
-# def build_list_of_csvs(img_path: str) -> list:
-#     for root, dirs, files in os.walk(img_path):
-#         for file in files:
-#             if file.endswith(".csv"):
-#                 # print('DEBUG: ', os.path.join(root, file))
-#                 csv_hash_files.append(os.path.join(root, file))  # build path to TXT in order to read it
-#     return csv_hash_files
-#
-#
-# hashes_list = build_list_of_csvs(img_root_path)
-# print(f'Build list of CSV *Function {time.monotonic() - start_time}')
-# result_file = img_root_path + 'result.csv'
-#
-#
-# # Concatenate all CSV files with hashes
-# def concatenate_hash_files(result_csv_path: str, hash_csv_list: list) -> str:
-#     with open(result_csv_path, 'w') as combined_file:
-#         for csv_file in hash_csv_list:
-#             with open(csv_file) as source_file:
-#                 combined_file.write(source_file.read())
-#
-#
-# concatenate_hash_files(result_file, hashes_list)
+
+build_hashes_list_file(jpg_folders)  # write hashes in file
+
+csv_hash_files: list[str] = []  # prepare a placeholder for the function: build_hashes_list
+
+
+# Build list of CSV files, which contain hashes to go through them
+def build_list_of_csvs(img_path: str) -> list:
+    for root, dirs, files in os.walk(img_path):
+        for file in files:
+            if file.endswith(".csv"):
+                # print('DEBUG: ', os.path.join(root, file))
+                csv_hash_files.append(os.path.join(root, file))  # build path to TXT in order to read it
+    return csv_hash_files
+
+
+hashes_list = build_list_of_csvs(img_root_path)
+print(f'Build list of CSV *Function {time.monotonic() - start_time}')
+result_file = img_root_path + 'result.csv'
+
+
+# Concatenate all CSV files with hashes
+def concatenate_hash_files(result_csv_path: str, hash_csv_list: list) -> str:
+    with open(result_csv_path, 'w') as combined_file:
+        header = ['VideoFileName', 'Hash']  # building csv header
+        writer = csv.writer(combined_file)
+        # write the header
+        writer.writerow(header)
+        for csv_file in hash_csv_list:
+            with open(csv_file) as source_file:
+                for _line in source_file:
+                    combined_file.write(_line)
+
+
+concatenate_hash_files(result_file, hashes_list)
 # print(f'Concatenate CSV *Function {time.monotonic() - start_time}')
 
 # ----------------------------------------------------------------------------------
